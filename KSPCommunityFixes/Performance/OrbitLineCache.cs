@@ -44,8 +44,9 @@ namespace KSPCommunityFixes.Performance
         // set when the original DrawOrbit will run after our prefix, so that it doesn't step the fade a second time
         private static bool suppressOpacityUpdate;
 
-        // state to validate once the original has redrawn the line
+        // state to validate once the original has redrawn the line, and the line it was redrawn into
         private static State pending;
+        private static object pendingLine;
 
         protected override void ApplyPatches()
         {
@@ -67,6 +68,7 @@ namespace KSPCommunityFixes.Performance
         {
             State cached = states.GetOrCreateValue(__instance);
             pending = null;
+            pendingLine = null;
 
             // the original runs this first, we do it here so that its result is part of the key
             splineOpacityUpdate(__instance);
@@ -89,15 +91,21 @@ namespace KSPCommunityFixes.Performance
             Copy(current, cached);
             cached.valid = false;
             pending = cached;
+            pendingLine = __instance.OrbitLine;
             return true;
         }
 
-        static void OrbitRendererBase_DrawOrbit_Postfix()
+        static void OrbitRendererBase_DrawOrbit_Postfix(OrbitRendererBase __instance)
         {
             suppressOpacityUpdate = false;
-            if (pending != null)
+
+            // DrawSpline replaces the VectorLine (MakeLine) when the 3D lines setting flipped, and the new line has no
+            // texture offset applied. Don't trust that bake, the next frame redraws it into the existing line.
+            if (pending != null && ReferenceEquals(pendingLine, __instance.OrbitLine))
                 pending.valid = true;
+
             pending = null;
+            pendingLine = null;
         }
 
         static bool OrbitRendererBase_SplineOpacityUpdate_Prefix()
