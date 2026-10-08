@@ -16,6 +16,8 @@ namespace KSPCommunityFixes.Performance
     class OrbitLineCache : BasePatch
     {
         private const double MaxTranslateRatio = 0.02;
+        // 2D lines are drawn in screen space and can't be moved : an offset change below this many pixels is ignored
+        private const double MaxStaticShiftPixels = 0.25;
 
         private sealed class State
         {
@@ -149,9 +151,20 @@ namespace KSPCommunityFixes.Performance
             Vector3d shiftDelta = b.shift - a.shift;
             if (shiftDelta.sqrMagnitude >= 1e-12)
             {
-                if (!a.draw3d || shiftDelta.magnitude > MaxTranslateRatio * (b.camPos - (Vector3)b.shift).magnitude)
-                    return false;
-                translate = true;
+                double camDistance = (b.camPos - (Vector3)b.shift).magnitude;
+                if (a.draw3d && b.draw3d)
+                {
+                    if (shiftDelta.magnitude > MaxTranslateRatio * camDistance)
+                        return false;
+                    translate = true;
+                }
+                else
+                {
+                    // the baked state is kept on a match, so the drift can't accumulate past the threshold
+                    double viewHeight = 2.0 * camDistance * Math.Tan(b.fov * 0.5 * Mathf.Deg2Rad);
+                    if (shiftDelta.magnitude * b.screenH > MaxStaticShiftPixels * viewHeight)
+                        return false;
+                }
             }
 
             return a.camPos == b.camPos
